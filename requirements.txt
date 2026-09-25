@@ -1,0 +1,11 @@
+pandas
+numpy
+scikit-learn
+scipy
+rapidfuzz
+matplotlib
+joblib
+unidecode
+tqdm
+xgboost
+lightgbm
