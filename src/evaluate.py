@@ -1,7 +1,8 @@
 ﻿"""Evaluation module for Business Entity Resolution Challenge.
 
 Calculates exact entity-level Precision, Recall, and macro F0.5,
-faithfully implementing singleton handling and set-level metrics.
+faithfully implementing singleton handling, unrounded internal values,
+and comprehensive error and subset diagnostics.
 """
 
 import sys
@@ -14,25 +15,36 @@ if str(PROJECT_ROOT) not in sys.path:
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from typing import Dict, List, Set, Tuple, Optional, Any
+from typing import Dict, List, Set, Tuple, Optional, Any, Union
 import numpy as np
 import pandas as pd
 
 
 def compute_entity_metrics(true_set: Set[str], pred_set: Set[str]) -> Tuple[float, float, float]:
-    """Compute (precision, recall, f0_5) for a single Source 1 entity set match."""
-    # Singleton case: true set is empty
+    """Compute (precision, recall, f0_5) for a single Source 1 entity set match.
+
+    Rules:
+    - If true set is empty (singleton):
+        - If pred set is empty: P=1.0, R=1.0, F0.5=1.0 (correct singleton).
+        - If pred set is non-empty: P=0.0, R=0.0, F0.5=0.0 (false positive on singleton).
+    - If true set is non-empty:
+        - If pred set is empty: P=0.0, R=0.0, F0.5=0.0 (missed matches).
+        - If pred set is non-empty:
+            TP = len(true_set & pred_set)
+            P = TP / len(pred_set)
+            R = TP / len(true_set)
+            denom = 0.25 * P + R
+            F0.5 = (1.25 * P * R) / denom if denom > 0 else 0.0
+    """
     if not true_set:
         if not pred_set:
-            return 1.0, 1.0, 1.0  # Perfect credit for correctly predicting no match
+            return 1.0, 1.0, 1.0
         else:
-            return 0.0, 0.0, 0.0  # False positive on a singleton
+            return 0.0, 0.0, 0.0
 
-    # True set is non-empty, but prediction is empty
     if not pred_set:
         return 0.0, 0.0, 0.0
 
-    # Both non-empty
     tp = len(true_set.intersection(pred_set))
     if tp == 0:
         return 0.0, 0.0, 0.0
@@ -49,8 +61,12 @@ def evaluate_predictions(
     predictions_map: Dict[str, Set[str]],
     ground_truth_map: Dict[str, Set[str]],
     s1_ids: List[str]
-) -> Dict[str, float]:
-    """Calculate macro-averaged metrics across all evaluated Source 1 entities."""
+) -> Dict[str, Any]:
+    """Calculate macro-averaged metrics across all evaluated Source 1 entities.
+
+    Retains unrounded raw float values for precision thresholding and optimization,
+    providing rounded keys for display.
+    """
     p_list = []
     r_list = []
     f05_list = []
@@ -74,21 +90,76 @@ def evaluate_predictions(
             if not p_set:
                 singleton_correct += 1
 
-    p_arr = np.array(p_list)
-    r_arr = np.array(r_list)
-    f_arr = np.array(f05_list)
-    c_arr = np.array(pred_match_counts)
+    p_arr = np.array(p_list, dtype=np.float64)
+    r_arr = np.array(r_list, dtype=np.float64)
+    f_arr = np.array(f05_list, dtype=np.float64)
+    c_arr = np.array(pred_match_counts, dtype=np.int32)
+
+    macro_p_raw = float(p_arr.mean()) if len(p_arr) > 0 else 0.0
+    macro_r_raw = float(r_arr.mean()) if len(r_arr) > 0 else 0.0
+    macro_f05_raw = float(f_arr.mean()) if len(f_arr) > 0 else 0.0
+
+    # Report None (N/A) when no singletons are present
+    if singleton_total > 0:
+        singleton_acc_raw = float(singleton_correct / singleton_total)
+        singleton_acc_disp = round(singleton_acc_raw, 4)
+    else:
+        singleton_acc_raw = None
+        singleton_acc_disp = "N/A"
 
     return {
-        "macro_precision": round(float(p_arr.mean()), 4),
-        "macro_recall": round(float(r_arr.mean()), 4),
-        "macro_f0_5": round(float(f_arr.mean()), 4),
+        # Full precision raw values for tuning / selection
+        "macro_precision_raw": macro_p_raw,
+        "macro_recall_raw": macro_r_raw,
+        "macro_f0_5_raw": macro_f05_raw,
+        "singleton_accuracy_raw": singleton_acc_raw,
+
+        # Display friendly values
+        "macro_precision": round(macro_p_raw, 4),
+        "macro_recall": round(macro_r_raw, 4),
+        "macro_f0_5": round(macro_f05_raw, 4),
         "singleton_count": singleton_total,
-        "singleton_accuracy": round(singleton_correct / singleton_total, 4) if singleton_total > 0 else 1.0,
-        "avg_predicted_matches": round(float(c_arr.mean()), 2),
-        "pct_zero_predicted": round(float((c_arr == 0).mean() * 100), 2),
+        "singleton_accuracy": singleton_acc_disp,
+        "avg_predicted_matches": round(float(c_arr.mean()), 2) if len(c_arr) else 0.0,
+        "pct_zero_predicted": round(float((c_arr == 0).mean() * 100), 2) if len(c_arr) else 0.0,
         "total_evaluated_s1": len(s1_ids)
     }
+
+
+def evaluate_predictions_detailed(
+    predictions_map: Dict[str, Set[str]],
+    ground_truth_map: Dict[str, Set[str]],
+    s1_metadata_df: pd.DataFrame
+) -> Dict[str, Any]:
+    """Detailed evaluation breaking down performance by country, match category, and missingness."""
+    s1_ids = s1_metadata_df["entity_id"].tolist()
+    overall = evaluate_predictions(predictions_map, ground_truth_map, s1_ids)
+
+    breakdown = {"overall": overall, "by_country": {}, "by_match_cardinality": {}}
+
+    # Breakdown by country
+    for country, sub_df in s1_metadata_df.groupby("country"):
+        sub_ids = sub_df["entity_id"].tolist()
+        breakdown["by_country"][str(country)] = evaluate_predictions(predictions_map, ground_truth_map, sub_ids)
+
+    # Breakdown by match count in GT
+    s1_metadata_df = s1_metadata_df.copy()
+    s1_metadata_df["true_match_count"] = [len(ground_truth_map.get(eid, set())) for eid in s1_ids]
+
+    bins = [
+        ("0 (Singleton)", s1_metadata_df[s1_metadata_df["true_match_count"] == 0]),
+        ("1 match", s1_metadata_df[s1_metadata_df["true_match_count"] == 1]),
+        ("2-3 matches", s1_metadata_df[s1_metadata_df["true_match_count"].isin([2, 3])]),
+        ("4+ matches", s1_metadata_df[s1_metadata_df["true_match_count"] >= 4]),
+    ]
+
+    for label, sub_df in bins:
+        if len(sub_df) > 0:
+            breakdown["by_match_cardinality"][label] = evaluate_predictions(
+                predictions_map, ground_truth_map, sub_df["entity_id"].tolist()
+            )
+
+    return breakdown
 
 
 def compute_heuristic_score(feat_dict: Dict[str, float]) -> float:
@@ -105,27 +176,6 @@ def compute_heuristic_score(feat_dict: Dict[str, float]) -> float:
         0.30 * feat_dict.get("feat_addr_numeric_jaccard", 0.0)
     )
     if feat_dict.get("feat_addr_is_empty", 0.0) > 0.5:
-        # Address missing in candidate: rely strictly on high name confidence
         return name_score * 0.90
     else:
         return 0.65 * name_score + 0.35 * addr_score
-
-
-if __name__ == "__main__":
-    # Test evaluation logic
-    dummy_gt = {
-        "S1-1": {"S2-10", "S3-20"},
-        "S1-2": {"S2-30"},
-        "S1-3": set(),  # singleton
-        "S1-4": set(),  # singleton
-    }
-    dummy_pred = {
-        "S1-1": {"S2-10", "S3-20"},  # Perfect: P=1, R=1, F0.5=1
-        "S1-2": {"S2-30", "S3-99"},  # 1 hit, 1 false positive: P=0.5, R=1, F0.5=0.555
-        "S1-3": set(),               # Correct singleton: 1.0
-        "S1-4": {"S2-50"},           # False positive singleton: 0.0
-    }
-    res = evaluate_predictions(dummy_pred, dummy_gt, ["S1-1", "S1-2", "S1-3", "S1-4"])
-    print("=== Evaluator Sanity Verification ===")
-    for k, v in res.items():
-        print(f"  {k}: {v}")

@@ -2,10 +2,16 @@
 
 Provides robust, deterministic normalization for business names and addresses,
 handling multilingual scripts (English, Indic scripts, French), legal suffixes,
-abbreviations, noise, and addresses without external lookup.
+trade names (DBA), abbreviations, noise, and addresses without external lookup.
 """
 
 import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -97,7 +103,6 @@ ADDRESS_ABBREV_MAP = {
     r"\bplot\b": "plot",
     r"\bsec\b": "sector",
     r"\brue\b": "rue",
-    r"\bbvd\b": "boulevard",
     r"\ball\b": "allee",
     r"\ballee\b": "allee",
 }
@@ -120,8 +125,11 @@ def normalize_text_general(text: str) -> str:
     text = re.sub(r"&", " and ", text)
     text = re.sub(r"^[<\-#@*!]+\s*", "", text)
     text = re.sub(r"https?://\S+|www\.\S+", "", text)
-    text = re.sub(r"\bdba\b.*", "", text)
-    
+
+    # Instead of deleting everything after 'dba', replace trade-name markers with space
+    # so both the legal name and trade name are preserved as searchable tokens
+    text = re.sub(r"\b(dba|d/b/a|t/a|trading\s+as|fka|f/k/a|aka|a/k/a)\b", " ", text)
+
     # Strip punctuation while preserving letters, numbers, whitespace, and combining vowel marks (Mn, Mc)
     chars = [c if (c.isalnum() or unicodedata.category(c) in ("Mn", "Mc") or c.isspace()) else " " for c in text]
     text = "".join(chars)
@@ -141,7 +149,8 @@ def normalize_name(raw_name: str) -> Tuple[str, str, str]:
 
     # Transliterated ASCII for cross-script comparison
     name_ascii = unidecode.unidecode(clean).strip()
-    name_ascii = re.sub(r"\s+", " ", name_ascii)
+    name_ascii = re.sub(r"[^\w\s]", " ", name_ascii)
+    name_ascii = re.sub(r"\s+", " ", name_ascii).strip()
 
     full_norm = clean
     for k, v in LEGAL_SUFFIX_MAP.items():
@@ -192,30 +201,3 @@ def extract_postal_code(tokens: List[str], country: str) -> Optional[str]:
             if len(t) == 5:
                 return t
     return None
-
-
-if __name__ == "__main__":
-    test_cases = [
-        ("ABC Technologies Pvt. Ltd.", "Plot 12, MG Road, Bengaluru", "India"),
-        ("ABC Technologies Private Limited", "12 M.G. Rd Bangalore", "India"),
-        ("<< Team Ecole", "175 Boulevard du Président Franklin Roosevelt", "France"),
-        ("Marina Ecole France Sarl", "63 R. DE DIEPPE, LILLE", "France"),
-        ("-- Holloway Peak Inc Seafood", "105 ELM ST, MORGANTON, NC", "US"),
-        ("wilfordhancock.com", "Mack Rd, Haltom City, Texas", "US"),
-        ("राम मार्केटिंग प्राइवेट लिमिटेड", "KH NO. -570/13, NEW DELHI", "India"),
-        ("आदित्य प्रॉपर्टीज एलएलपी", "G-3/571, GULMOHAR COLONY, BHOPAL", "India")
-    ]
-
-    print("=== Normalization Unit / Sanity Verification ===")
-    for name, addr, cntry in test_cases:
-        norm_n, core_n, ascii_n = normalize_name(name)
-        norm_a, nums = normalize_address(addr)
-        postal = extract_postal_code(nums, cntry)
-        print(f"Original Name: {name}")
-        print(f"  -> Norm:  '{norm_n}'")
-        print(f"  -> Core:  '{core_n}'")
-        print(f"  -> ASCII: '{ascii_n}'")
-        print(f"Original Addr: {addr}")
-        print(f"  -> Norm:  '{norm_a}'")
-        print(f"  -> Nums:  {nums}, Postal: {postal}")
-        print("-" * 50)

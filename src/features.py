@@ -1,13 +1,13 @@
 ﻿"""Feature engineering module for Business Entity Resolution Challenge.
 
 Extracts pairwise similarity features between Source 1 records and candidate
-records (Source 2 / Source 3).
+records (Source 2 / Source 3), including multilingual/ASCII cross-script matching,
+address numeric overlap, and candidate metadata.
 """
 
 import sys
 from pathlib import Path
 
-# Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -18,7 +18,7 @@ if hasattr(sys.stdout, "reconfigure"):
 from typing import Dict, List, Set, Tuple, Optional, Any
 import numpy as np
 import pandas as pd
-from rapidfuzz import fuzz, distance
+from rapidfuzz import fuzz
 
 from src.normalize import normalize_name, normalize_address, extract_postal_code
 
@@ -27,6 +27,7 @@ FEATURE_NAMES = [
     "feat_name_exact",
     "feat_name_core_exact",
     "feat_name_fuzz_ratio",
+    "feat_name_ascii_fuzz_ratio",
     "feat_name_partial_ratio",
     "feat_name_token_sort_ratio",
     "feat_name_token_set_ratio",
@@ -87,36 +88,57 @@ def compute_pair_features(
     """Compute all pairwise similarity features for a single (S1, Candidate) pair."""
     s1_norm = s1_row.get("name_norm", "")
     s1_core = s1_row.get("name_core", "")
+    s1_ascii = s1_row.get("name_ascii", "")
     cand_norm = cand_row.get("name_norm", "")
     cand_core = cand_row.get("name_core", "")
+    cand_ascii = cand_row.get("name_ascii", "")
 
     s1_addr = s1_row.get("addr_norm", "")
     cand_addr = cand_row.get("addr_norm", "")
 
-    s1_tokens = set(s1_norm.split())
-    cand_tokens = set(cand_norm.split())
+    # Safeguard against treating two empty names as similar
+    if not s1_norm or not cand_norm:
+        exact_name = 0.0
+        exact_core = 0.0
+        fuzz_ratio = 0.0
+        ascii_fuzz_ratio = 0.0
+        partial_ratio = 0.0
+        token_sort = 0.0
+        token_set = 0.0
+        jaccard_name = 0.0
+        containment_name = 0.0
+        shared_tokens = 0.0
+        first_match = 0.0
+        last_match = 0.0
+        name_len_diff = float(abs(len(s1_norm) - len(cand_norm)))
+        name_rel_diff = 1.0
+    else:
+        s1_tokens = set(s1_norm.split())
+        cand_tokens = set(cand_norm.split())
 
-    exact_name = 1.0 if s1_norm and s1_norm == cand_norm else 0.0
-    exact_core = 1.0 if s1_core and s1_core == cand_core else 0.0
+        exact_name = 1.0 if s1_norm == cand_norm else 0.0
+        exact_core = 1.0 if s1_core and s1_core == cand_core else 0.0
 
-    fuzz_ratio = fuzz.ratio(s1_norm, cand_norm) / 100.0
-    partial_ratio = fuzz.partial_ratio(s1_norm, cand_norm) / 100.0
-    token_sort = fuzz.token_sort_ratio(s1_norm, cand_norm) / 100.0
-    token_set = fuzz.token_set_ratio(s1_norm, cand_norm) / 100.0
+        fuzz_ratio = fuzz.ratio(s1_norm, cand_norm) / 100.0
+        ascii_fuzz_ratio = fuzz.ratio(s1_ascii, cand_ascii) / 100.0 if (s1_ascii and cand_ascii) else fuzz_ratio
+        partial_ratio = fuzz.partial_ratio(s1_norm, cand_norm) / 100.0
+        token_sort = fuzz.token_sort_ratio(s1_norm, cand_norm) / 100.0
+        token_set = fuzz.token_set_ratio(s1_norm, cand_norm) / 100.0
 
-    jaccard_name = token_jaccard(s1_tokens, cand_tokens)
-    containment_name = token_containment(s1_tokens, cand_tokens)
-    shared_tokens = float(len(s1_tokens.intersection(cand_tokens)))
+        jaccard_name = token_jaccard(s1_tokens, cand_tokens)
+        containment_name = token_containment(s1_tokens, cand_tokens)
+        shared_tokens = float(len(s1_tokens.intersection(cand_tokens)))
 
-    s1_tok_list = s1_norm.split()
-    cand_tok_list = cand_norm.split()
-    first_match = 1.0 if (s1_tok_list and cand_tok_list and s1_tok_list[0] == cand_tok_list[0]) else 0.0
-    last_match = 1.0 if (s1_tok_list and cand_tok_list and s1_tok_list[-1] == cand_tok_list[-1]) else 0.0
+        s1_tok_list = s1_norm.split()
+        cand_tok_list = cand_norm.split()
+        first_match = 1.0 if (s1_tok_list and cand_tok_list and s1_tok_list[0] == cand_tok_list[0]) else 0.0
+        last_match = 1.0 if (s1_tok_list and cand_tok_list and s1_tok_list[-1] == cand_tok_list[-1]) else 0.0
 
-    len1, len2 = len(s1_norm), len(cand_norm)
-    name_len_diff = float(abs(len1 - len2))
-    name_rel_diff = name_len_diff / max(1, max(len1, len2))
+        len1, len2 = len(s1_norm), len(cand_norm)
+        name_len_diff = float(abs(len1 - len2))
+        name_rel_diff = name_len_diff / max(1, max(len1, len2))
 
+    # Address features
     addr_empty = 1.0 if not cand_addr or cand_addr.strip() == "" else 0.0
 
     if not addr_empty and s1_addr:
@@ -167,6 +189,7 @@ def compute_pair_features(
         "feat_name_exact": exact_name,
         "feat_name_core_exact": exact_core,
         "feat_name_fuzz_ratio": fuzz_ratio,
+        "feat_name_ascii_fuzz_ratio": ascii_fuzz_ratio,
         "feat_name_partial_ratio": partial_ratio,
         "feat_name_token_sort_ratio": token_sort,
         "feat_name_token_set_ratio": token_set,
@@ -205,7 +228,7 @@ def enrich_record_dict(row: Dict[str, Any]) -> Dict[str, Any]:
     addr = row.get("business_address", "")
     cntry = row.get("country", "")
 
-    norm_n, core_n, _ = normalize_name(name)
+    norm_n, core_n, ascii_n = normalize_name(name)
     norm_a, nums = normalize_address(addr)
     postal = extract_postal_code(nums, cntry)
 
@@ -214,54 +237,8 @@ def enrich_record_dict(row: Dict[str, Any]) -> Dict[str, Any]:
         "country": str(cntry),
         "name_norm": norm_n,
         "name_core": core_n,
+        "name_ascii": ascii_n,
         "addr_norm": norm_a,
         "addr_nums": nums,
         "postal_code": postal,
     }
-
-
-if __name__ == "__main__":
-    s1 = enrich_record_dict({
-        "entity_id": "S1-00001",
-        "business_name": "ABC Technologies Private Limited",
-        "business_address": "Plot 12, MG Road, Bengaluru - 560001",
-        "country": "India"
-    })
-
-    c_true = enrich_record_dict({
-        "entity_id": "S2-00047",
-        "business_name": "ABC Technologies Pvt Ltd",
-        "business_address": "12 M.G. Rd Bangalore 560001",
-        "country": "India"
-    })
-
-    c_hard_neg = enrich_record_dict({
-        "entity_id": "S2-00999",
-        "business_name": "XYZ Retail Private Limited",
-        "business_address": "Plot 12, MG Road, Bengaluru - 560001",
-        "country": "India"
-    })
-
-    c_non_match = enrich_record_dict({
-        "entity_id": "S3-00123",
-        "business_name": "Sunrise Bakery",
-        "business_address": "Main Bazaar Road, Jaipur",
-        "country": "India"
-    })
-
-    f_true = compute_pair_features(s1, c_true, 0.95, 0.88, 2)
-    f_hard = compute_pair_features(s1, c_hard_neg, 0.20, 0.98, 1)
-    f_none = compute_pair_features(s1, c_non_match, 0.05, 0.05, 1)
-
-    print("=== Sample Pair Feature Verification ===")
-    print("\n1. Obvious True Match:")
-    for k in ["feat_name_exact", "feat_name_core_exact", "feat_name_fuzz_ratio", "feat_addr_fuzz_ratio", "feat_addr_numeric_jaccard", "feat_addr_postal_match"]:
-        print(f"  {k}: {f_true[k]}")
-
-    print("\n2. Hard Negative (Same address, different business):")
-    for k in ["feat_name_exact", "feat_name_core_exact", "feat_name_fuzz_ratio", "feat_addr_fuzz_ratio", "feat_addr_numeric_jaccard", "feat_addr_postal_match"]:
-        print(f"  {k}: {f_hard[k]}")
-
-    print("\n3. Obvious Non-Match:")
-    for k in ["feat_name_exact", "feat_name_core_exact", "feat_name_fuzz_ratio", "feat_addr_fuzz_ratio", "feat_addr_numeric_jaccard", "feat_addr_postal_match"]:
-        print(f"  {k}: {f_none[k]}")

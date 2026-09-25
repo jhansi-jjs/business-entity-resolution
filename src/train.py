@@ -1,4 +1,4 @@
-﻿"""Model training, grouped validation, and threshold tuning module.
+"""Model training, grouped validation, and threshold tuning module.
 
 Trains candidate matchers with GroupShuffleSplit on source1_entity_id,
 evaluates entity-level macro F0.5, tunes the decision threshold, and saves artifacts.
@@ -74,14 +74,16 @@ def tune_threshold_and_evaluate(
     val_df: pd.DataFrame,
     val_s1_ids: List[str],
     gt_map: Dict[str, Set[str]],
-    is_heuristic: bool = False
+    is_heuristic: bool = False,
+    feature_names: Optional[List[str]] = None,
 ) -> Tuple[float, Dict[str, float]]:
     """Grid search thresholds for max macro F0.5 at entity level."""
+    feat_names = feature_names if feature_names is not None else FEATURE_NAMES
     # Predict probabilities for all pairs
     if is_heuristic:
         probs = [compute_heuristic_score(row) for _, row in val_df.iterrows()]
     else:
-        probs = model.predict_proba(val_df[FEATURE_NAMES])[:, 1]
+        probs = model.predict_proba(val_df[feat_names])[:, 1]
 
     val_df = val_df.copy()
     val_df["pred_prob"] = probs

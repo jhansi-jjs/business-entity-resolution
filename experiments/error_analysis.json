@@ -1,0 +1,134 @@
+{
+  "num_assessment_queries": 500,
+  "total_blocking_misses": 21,
+  "total_classifier_fn": 28,
+  "total_classifier_fp": 8,
+  "singleton_fps": 0,
+  "sample_blocking_misses": [
+    {
+      "source1_id": "S1-987010400",
+      "target_id": "S2-140661931",
+      "s1_name": "Sunrise Consulting Pvt Ltd",
+      "s1_addr": "A-3, Shreepal Complex Near Aradhana Cinema, Thane, Maharashtra",
+      "country": "India"
+    },
+    {
+      "source1_id": "S1-42681495",
+      "target_id": "S2-320595400",
+      "s1_name": "Gulf International LLC",
+      "s1_addr": "616 Shepherd Hollow Road, Indian Mound, TN",
+      "country": "US"
+    },
+    {
+      "source1_id": "S1-558634684",
+      "target_id": "S2-623955087",
+      "s1_name": "Prime Food Private Limited",
+      "s1_addr": "Plot No. 23, Zone-1 M.P. Nagar, Bhopal, Madhya Pradesh",
+      "country": "India"
+    },
+    {
+      "source1_id": "S1-753157613",
+      "target_id": "S3-679830",
+      "s1_name": "High Tech Marketing",
+      "s1_addr": "50, Akbar Sahib St., Triplicane, Madras, Tamilnadu, Chennai, Tamil Nadu",
+      "country": "India"
+    },
+    {
+      "source1_id": "S1-499385240",
+      "target_id": "S3-883516864",
+      "s1_name": "Gujarat Infotech Pvt Ltd",
+      "s1_addr": "105, Fortune Aura, 1 Gurmeet Nagar Bhawarkua, Indore, Madhya Pradesh",
+      "country": "India"
+    }
+  ],
+  "sample_classifier_fn": [
+    {
+      "source1_id": "S1-952861133",
+      "target_id": "S3-463922554",
+      "prob": 0.12469106590537112,
+      "threshold": 0.75,
+      "s1_name": "Bay Living PC",
+      "s1_addr": "11918 Cheviott Hill Lane, Charlotte, NC",
+      "country": "US"
+    },
+    {
+      "source1_id": "S1-798628484",
+      "target_id": "S2-290570916",
+      "prob": 0.09217548264612124,
+      "threshold": 0.75,
+      "s1_name": "Secure Patriot Pipeline LLC",
+      "s1_addr": "4541 Evergreen Avenue, WI, Town Of Saratoga",
+      "country": "US"
+    },
+    {
+      "source1_id": "S1-900839250",
+      "target_id": "S3-866487330",
+      "prob": 0.15201996396245862,
+      "threshold": 0.75,
+      "s1_name": "Rathi Trading Pvt. Ltd.",
+      "s1_addr": "Angan Society, Near Idbi Bank, Plot No .46, Sector - 12, Vashi, Navi Mumbai, B- 402, Thane, Maharashtra",
+      "country": "India"
+    },
+    {
+      "source1_id": "S1-831227785",
+      "target_id": "S3-47697825",
+      "prob": 0.2192484019355516,
+      "threshold": 0.75,
+      "s1_name": "Santana Institute Limited",
+      "s1_addr": "B-702, 7Th Floor, Joyos Hubtown, Geeta Mandir, Astodia, Nr. Gsrtc Bus Ter, Minal, Ahmedabad, Gujarat",
+      "country": "India"
+    },
+    {
+      "source1_id": "S1-224534945",
+      "target_id": "S2-518930624",
+      "prob": 0.43590877999772093,
+      "threshold": 0.75,
+      "s1_name": "Gitanjali Realestate Private Limited",
+      "s1_addr": "Khasra No 950, 950 Me And 951, Village Kilhora Jalalabad Hapur, Hapur, Ghaziabad, Uttar Pradesh",
+      "country": "India"
+    }
+  ],
+  "sample_classifier_fp": [
+    {
+      "source1_id": "S1-804529270",
+      "target_id": "S2-290802069",
+      "prob": 0.9922531068416863,
+      "s1_name": "Womens Health Clinic Inc",
+      "s1_addr": "1367 Morphy Street, Fort Worth, TX",
+      "country": "US"
+    },
+    {
+      "source1_id": "S1-904230587",
+      "target_id": "S2-809810820",
+      "prob": 0.9133616672968082,
+      "s1_name": "Xie Quest, LLC",
+      "s1_addr": "29 Walter Street, Albany, NY",
+      "country": "US"
+    },
+    {
+      "source1_id": "S1-48784900",
+      "target_id": "S2-451443479",
+      "prob": 0.8435095573690305,
+      "s1_name": "Anand Agro Private Limited",
+      "s1_addr": "11/86, Sec-3, Rajender Nagar, Ghaziabad, Uttar Pradesh",
+      "country": "India"
+    },
+    {
+      "source1_id": "S1-529046082",
+      "target_id": "S3-831334129",
+      "prob": 0.763940731428385,
+      "s1_name": "Hari Management Private Limited",
+      "s1_addr": "Shop No 2, Ground Floor Sri Niwas Puri, I Market Opp Mother Dair, Y, New Delhi, South Delhi, Delhi",
+      "country": "India"
+    },
+    {
+      "source1_id": "S1-568500325",
+      "target_id": "S2-342096809",
+      "prob": 0.8946195854247372,
+      "s1_name": "Shree Technology Private Limited",
+      "s1_addr": "North West Delhi, Delhi, Plot No. 30, 2Nd Floor, Pkt-16, Sector-24",
+      "country": "India"
+    }
+  ],
+  "sample_singleton_fp": []
+}
