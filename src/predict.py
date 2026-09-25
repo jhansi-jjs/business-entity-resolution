@@ -19,6 +19,7 @@ import os
 import json
 import logging
 import gc
+import time
 from typing import Dict, List, Set, Tuple, Optional, Any
 import numpy as np
 import pandas as pd
@@ -68,7 +69,7 @@ class EntityResolver:
         country: str,
         s1_df: pd.DataFrame,
         targets_df: pd.DataFrame,
-        query_batch_size: int = 1000,
+        query_batch_size: int = 5000,
     ) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
         """Generate candidates and predict matches for a single country partition in bounded batches.
 
@@ -88,8 +89,15 @@ class EntityResolver:
         targets_df["name_core"] = [normalize_name(n)[1] for n in targets_df["business_name"]]
         targets_df["addr_norm"] = [normalize_address(a)[0] for a in targets_df["business_address"]]
 
-        # Pre-enrich target index
-        cand_dict = {row["entity_id"]: enrich_record_dict(row) for _, row in targets_df.iterrows()}
+        # Lightweight target lookup tuple (bname, baddr, country) to avoid multi-GB memory overhead
+        target_lookup = {
+            eid: (n, a, c) for eid, n, a, c in zip(
+                targets_df["entity_id"].values,
+                targets_df["business_name"].fillna("").values,
+                targets_df["business_address"].fillna("").values,
+                targets_df["country"].fillna("").values
+            )
+        }
 
         # 2. Fit Blocker once on target pool
         blocker = CountryBlocker(
@@ -98,6 +106,7 @@ class EntityResolver:
             addr_top_k=self.addr_top_k,
             name_sim_threshold=self.name_sim_threshold,
             addr_sim_threshold=self.addr_sim_threshold,
+            backend="inverted"
         )
         blocker.fit(targets_df)
 
@@ -106,6 +115,9 @@ class EntityResolver:
 
         # 3. Process S1 queries in strictly bounded batches
         total_queries = len(s1_df)
+        t_partition_start = time.time()
+        running_matches = 0
+
         for start_idx in range(0, total_queries, query_batch_size):
             end_idx = min(start_idx + query_batch_size, total_queries)
             s1_batch = s1_df.iloc[start_idx:end_idx]
@@ -113,44 +125,69 @@ class EntityResolver:
             s1_batch_dict = {row["entity_id"]: enrich_record_dict(row) for _, row in s1_batch.iterrows()}
             batch_cands = blocker.query(s1_batch, batch_size=500)
 
-            if not batch_cands:
-                continue
+            if batch_cands:
+                needed_cids = {item[1] for item in batch_cands if item[1] in target_lookup}
+                batch_cand_dict = {
+                    cid: enrich_record_dict({
+                        "entity_id": cid,
+                        "business_name": target_lookup[cid][0],
+                        "business_address": target_lookup[cid][1],
+                        "country": target_lookup[cid][2]
+                    })
+                    for cid in needed_cids
+                }
 
-            pair_records = []
-            pair_meta = []
-            for item in batch_cands:
-                s1_id = item[0]
-                cid = item[1]
-                csrc = item[2]
-                n_score = item[3]
-                a_score = item[4]
-                num_m = item[6]
+                pair_records = []
+                pair_meta = []
+                for item in batch_cands:
+                    s1_id = item[0]
+                    cid = item[1]
+                    csrc = item[2]
+                    n_score = item[3]
+                    a_score = item[4]
+                    num_m = item[6]
 
-                if cid not in cand_dict:
-                    continue
+                    if cid not in batch_cand_dict:
+                        continue
 
-                feats = compute_pair_features(
-                    s1_batch_dict[s1_id],
-                    cand_dict[cid],
-                    name_retrieval_score=n_score,
-                    addr_retrieval_score=a_score,
-                    num_blocking_methods=num_m
+                    feats = compute_pair_features(
+                        s1_batch_dict[s1_id],
+                        batch_cand_dict[cid],
+                        name_retrieval_score=n_score,
+                        addr_retrieval_score=a_score,
+                        num_blocking_methods=num_m
+                    )
+                    pair_records.append(feats)
+                    pair_meta.append((s1_id, cid))
+                    cand_map[s1_id].append(cid)
+
+                if pair_records:
+                    feat_df = pd.DataFrame(pair_records)[self.feature_names]
+                    probs = self.model.predict_proba(feat_df)[:, 1]
+
+                    for idx, (s1_id, cid) in enumerate(pair_meta):
+                        if probs[idx] >= self.threshold:
+                            match_map[s1_id].append(cid)
+                            running_matches += 1
+
+                del pair_records, pair_meta, batch_cand_dict, feat_df, probs
+
+            # Periodic progress reporting
+            if end_idx % 20000 == 0 or end_idx == total_queries:
+                elapsed = time.time() - t_partition_start
+                rate = end_idx / max(0.1, elapsed)
+                eta_sec = (total_queries - end_idx) / max(0.1, rate)
+                logger.info(
+                    f"[{country}] {end_idx:,}/{total_queries:,} queries ({end_idx/total_queries*100:.1f}%) "
+                    f"in {elapsed:.1f}s ({rate:.1f} q/s, ETA: {eta_sec/60:.1f}m). Matches found: {running_matches:,}"
                 )
-                pair_records.append(feats)
-                pair_meta.append((s1_id, cid))
-                cand_map[s1_id].append(cid)
 
-            if pair_records:
-                feat_df = pd.DataFrame(pair_records)[self.feature_names]
-                probs = self.model.predict_proba(feat_df)[:, 1]
-
-                for idx, (s1_id, cid) in enumerate(pair_meta):
-                    if probs[idx] >= self.threshold:
-                        match_map[s1_id].append(cid)
-
-            # Cleanup batch allocations
-            del pair_records, pair_meta, batch_cands, s1_batch_dict
+            del batch_cands, s1_batch_dict
             gc.collect()
+
+        # Clean up target lookup
+        del target_lookup
+        gc.collect()
 
         # Deduplicate and verify invariant
         for s1_id in s1_df["entity_id"]:

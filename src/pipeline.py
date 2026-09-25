@@ -96,7 +96,7 @@ def run_pipeline(
         # In test, load S2 and S3 partition for this country
         s2_chunk = []
         for c in iter_source_tsv(paths["test_source2"], chunksize=250000):
-            hit = c[c["country"] == country]
+            hit = c[c["country"] == country][["entity_id", "business_name", "business_address", "country"]]
             if len(hit) > 0:
                 s2_chunk.append(hit)
             if sample_size and sum(len(h) for h in s2_chunk) >= sample_size * 5:
@@ -104,7 +104,7 @@ def run_pipeline(
 
         s3_chunk = []
         for c in iter_source_tsv(paths["test_source3"], chunksize=250000):
-            hit = c[c["country"] == country]
+            hit = c[c["country"] == country][["entity_id", "business_name", "business_address", "country"]]
             if len(hit) > 0:
                 s3_chunk.append(hit)
             if sample_size and sum(len(h) for h in s3_chunk) >= sample_size * 5:
