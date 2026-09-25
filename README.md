@@ -113,35 +113,33 @@ business-entity-resolution/
 
 All metrics below are measured on leak-free splits sampled strictly from organizer training data.
 
-#### 1. Frozen Held-Out Assessment Split (500 Queries, Evaluated Once)
-- **Macro $F_{0.5}$:** `0.9893`
-- **Macro Precision:** `0.9959`
-- **Macro Recall:** `0.9748`
-- **Singleton Accuracy:** `100.0%` (27 / 27 true singletons correctly assigned empty match sets)
-- **Average Candidates per Query:** `29.4`
+#### 1. Validated Test Submissions Ready for Portal Upload
 
-#### 2. Uncurated 10.3M Full Target Index Blocking Benchmark
+| Submission Version | File Path | Row Count | File Size | SHA-256 Checksum | Validator Status | Notes |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **GBDT Matching Model (v1)** | `output/matching_results.tsv`<br>`output/submission_v1_gbdt/matching_results.tsv` | **1,732,544** | 162.4 MB | `947F5F5C5E05F27967D5DEE310E3D884C02C4B54DA39089E0AF3A629FD9D609E` | **PASS** (`--check-ids` verified) | 10.73M links, 19,371 genuine singletons (1.12%). Matcher threshold = 0.75 |
+| **Deterministic Baseline** | `output/baseline_matching_results.tsv` | **1,732,544** | 261.8 MB | `C7D40626FE75425EB6763BEA6598EF1F1BC64722ED8B9EC53610B79CE8816841` | **PASS** | Initial rule-based baseline (scored 0.386 on public leaderboard) |
+
+#### 2. Empirical Benchmark: Full-Index Retrieval & Realistic Hard Negatives
+To diagnose why models evaluated against curated target pools (25k targets) fail on multi-million uncurated indexes, we conducted a strictly leak-free benchmark on the complete **4,133,346 India training target index** ([`experiments/train_with_hard_negatives.py`](experiments/train_with_hard_negatives.py)):
+
+| Metric | Model Trained on Curated Targets | Model Trained on Realistic Full-Target Negatives | Measured Delta |
+| :--- | :---: | :---: | :---: |
+| **Macro $F_{0.5}$ (threshold 0.65)** | **0.4995** | **0.7744** | **+0.2749 (+55.0%)** |
+| **Precision** | **49.73%** | **87.77%** | **+38.04%** |
+| **Recall (Non-Singletons)** | 60.44% | 59.82% | -0.62% |
+| **Singleton Accuracy (Rejection)** | **0.0%** (100% False Positives) | **100.0%** (0% False Positives) | **+100.0%** |
+| **Avg. Matches Predicted / Query** | **5.58** (Overprediction) | **2.34** (Controlled) | Ground-truth avg is ~3.67 |
+
+**Core Diagnostic Finding:** Training against small curated target pools prevents models from learning discriminative negative boundaries against multi-million lookalikes, leading to 100% false-positive rates on singletons and severe precision collapse. Training on realistic negatives retrieved directly from the full target pool restores precision to **87.77%** and yields **100% singleton rejection**.
+
+#### 3. Uncurated 10.3M Full Target Index Blocking Benchmark
 Evaluated against the complete uncurated training target pool (10.3M records in Source 2 + Source 3):
 - **Overall Candidate Recall:** `95.65%`
 - **India Partition Recall (4.13M targets):** `94.79%`
 - **US Partition Recall (6.19M targets):** `96.59%`
 - **Average Candidates per Query:** `32.4`
 - **Retrieval Latency:** `1.2–2.4 ms/query` (`419–816 queries/sec` on CPU)
-
-#### 3. Model Comparison on Tuning Split (Macro $F_{0.5}$)
-| Model Architecture | Macro Precision | Macro Recall | Macro $F_{0.5}$ | Optimal Threshold |
-| :--- | :---: | :---: | :---: | :---: |
-| **HistGradientBoosting (Chosen)** | **0.9972** | **0.9723** | **0.9921** | **0.75** |
-| Random Forest | 0.9958 | 0.9587 | 0.9881 | 0.70 |
-| Logistic Regression | 0.9812 | 0.9529 | 0.9754 | 0.60 |
-| Decision Tree | 0.9785 | 0.9560 | 0.9739 | 0.65 |
-
-#### 4. Feature Ablation Analysis
-Ablating feature subsets from the 31-feature set confirms complementary signals:
-- **Baseline (All 31 features):** Macro $F_{0.5} = 0.9921$
-- **Without Address Features:** Macro $F_{0.5} = 0.9234$ ($-0.0687$ drop)
-- **Without Name Fuzzy Features:** Macro $F_{0.5} = 0.8841$ ($-0.1080$ drop)
-- **Without Retrieval Scores:** Macro $F_{0.5} = 0.9798$ ($-0.0123$ drop)
 
 ---
 
