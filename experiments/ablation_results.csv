@@ -1,6 +1,6 @@
-ablation,num_features,val_macro_precision,val_macro_recall,val_macro_f0_5
-A. Name features only,14,0.9852,0.951,0.9765
-B. Address features only,14,0.764,0.812,0.7712
-C. Name + Address basic,28,0.989,0.961,0.9808
-D. Name + Address + Numeric,27,0.991,0.9635,0.9825
-E. Full Features (All Signals),30,0.9935,0.9656,0.9843
+ablation,num_features,best_threshold,val_macro_precision,val_macro_recall,val_macro_f0_5,val_singleton_accuracy
+A. Name features only,15,0.7,0.9405,0.8373,0.9057,0.8571
+B. Address features only,14,0.45,0.9567,0.9063,0.9383,0.8929
+C. Name + Address basic,29,0.6,0.9968,0.9808,0.992,1.0
+D. Name + Address + Numeric (no meta),28,0.75,0.9954,0.977,0.9897,0.9643
+E. Full Features (All Signals),31,0.75,0.9978,0.9785,0.9921,1.0

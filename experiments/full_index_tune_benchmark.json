@@ -1,0 +1,64 @@
+{
+  "India": {
+    "country": "India",
+    "queries_evaluated": 50,
+    "indexed_targets_count": 4133346,
+    "candidate_pairs_generated": 1626,
+    "candidate_counts": {
+      "min": 26,
+      "max": 55,
+      "mean": 32.52,
+      "median": 31.0,
+      "p95": 44.55
+    },
+    "blocking_recall": {
+      "true_links_total": 192,
+      "true_links_retrieved": 182,
+      "recall": 0.9479166666666666
+    },
+    "timing_seconds": {
+      "target_stream_load": 30.613084077835083,
+      "normalization": 864.0861313343048,
+      "indexing_fit": 628.4874730110168,
+      "candidate_query": 69.67938256263733,
+      "total": 1592.9716489315033
+    },
+    "memory_mb": {
+      "start": 523.578125,
+      "after_load": 1934.78515625,
+      "after_fit": 5716.484375,
+      "peak_delta": 5192.90625
+    }
+  },
+  "US": {
+    "country": "US",
+    "queries_evaluated": 50,
+    "indexed_targets_count": 6186873,
+    "candidate_pairs_generated": 1663,
+    "candidate_counts": {
+      "min": 27,
+      "max": 54,
+      "mean": 33.26,
+      "median": 31.0,
+      "p95": 52.0
+    },
+    "blocking_recall": {
+      "true_links_total": 176,
+      "true_links_retrieved": 170,
+      "recall": 0.9659090909090909
+    },
+    "timing_seconds": {
+      "target_stream_load": 33.73562502861023,
+      "normalization": 1290.1731457710266,
+      "indexing_fit": 1055.0576741695404,
+      "candidate_query": 91.72910785675049,
+      "total": 2470.7772872447968
+    },
+    "memory_mb": {
+      "start": 235.94140625,
+      "after_load": 1762.61328125,
+      "after_fit": 5978.25,
+      "peak_delta": 5742.30859375
+    }
+  }
+}

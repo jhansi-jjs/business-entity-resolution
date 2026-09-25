@@ -1,6 +1,6 @@
 model,threshold,macro_precision,macro_recall,macro_f0_5,singleton_accuracy,avg_predicted_matches
-Heuristic Baseline,0.55,0.962,0.8705,0.9294,1.0,2.88
-Logistic Regression,0.55,0.9904,0.9698,0.9833,1.0,3.21
-Random Forest,0.6,0.99,0.9646,0.9805,1.0,3.19
-HistGradientBoosting,0.75,0.9935,0.9656,0.9843,1.0,3.19
-LightGBM,0.85,0.9915,0.9652,0.982,1.0,3.2
+Heuristic Baseline,0.55,0.9518,0.8536,0.9188,0.8929,3.1
+Logistic Regression,0.5,0.9927,0.9791,0.9879,1.0,3.48
+Random Forest,0.5,0.9949,0.9774,0.9891,1.0,3.46
+HistGradientBoosting,0.75,0.9978,0.9785,0.9921,1.0,3.45
+LightGBM,0.85,0.9982,0.9761,0.9914,1.0,3.44

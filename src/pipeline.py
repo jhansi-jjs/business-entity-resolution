@@ -1,4 +1,4 @@
-﻿"""End-to-end pipeline implementation for Business Entity Resolution Challenge.
+"""End-to-end pipeline implementation for Business Entity Resolution Challenge.
 
 Orchestrates all explicit pipeline stages:
 [1/8] Data Loading
@@ -25,6 +25,7 @@ if hasattr(sys.stdout, "reconfigure"):
 import os
 import json
 import logging
+import gc
 from typing import Dict, List, Set, Tuple, Optional, Any
 import pandas as pd
 
@@ -43,7 +44,10 @@ def run_pipeline(
     """Execute the complete end-to-end entity resolution pipeline."""
     paths = get_default_paths()
     if output_dir is None:
-        output_dir = PROJECT_ROOT / "output"
+        if sample_size is not None:
+            output_dir = PROJECT_ROOT / "output" / "sample_smoke"
+        else:
+            output_dir = PROJECT_ROOT / "output"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     print("\n" + "="*70)
@@ -92,7 +96,7 @@ def run_pipeline(
         # In test, load S2 and S3 partition for this country
         s2_chunk = []
         for c in iter_source_tsv(paths["test_source2"], chunksize=250000):
-            hit = c[c["country"] == country]
+            hit = c[c["country"] == country][["entity_id", "business_name", "business_address", "country"]]
             if len(hit) > 0:
                 s2_chunk.append(hit)
             if sample_size and sum(len(h) for h in s2_chunk) >= sample_size * 5:
@@ -100,7 +104,7 @@ def run_pipeline(
 
         s3_chunk = []
         for c in iter_source_tsv(paths["test_source3"], chunksize=250000):
-            hit = c[c["country"] == country]
+            hit = c[c["country"] == country][["entity_id", "business_name", "business_address", "country"]]
             if len(hit) > 0:
                 s3_chunk.append(hit)
             if sample_size and sum(len(h) for h in s3_chunk) >= sample_size * 5:
@@ -119,6 +123,9 @@ def run_pipeline(
         for s1_id, c_list in c_cands.items():
             all_candidates[s1_id] = c_list
             total_candidate_pairs += len(c_list)
+
+        del targets_country, s2_chunk, s3_chunk, c_matches, c_cands
+        gc.collect()
 
     # Stage 7: Writing TSV files
     print("\n[7/8] Writing final submission TSV files...")

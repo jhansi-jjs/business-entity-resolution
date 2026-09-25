@@ -1,0 +1,20 @@
+{
+  "US": {
+    "queries": 1502,
+    "targets": 17136,
+    "candidate_pairs": 44147,
+    "candidates_per_query": 29.39214380825566,
+    "true_pairs_in_ground_truth": 5268,
+    "true_pairs_retrieved": 5262,
+    "blocking_recall": 0.9988610478359908
+  },
+  "India": {
+    "queries": 998,
+    "targets": 11596,
+    "candidate_pairs": 29911,
+    "candidates_per_query": 29.970941883767534,
+    "true_pairs_in_ground_truth": 3464,
+    "true_pairs_retrieved": 3398,
+    "blocking_recall": 0.98094688221709
+  }
+}

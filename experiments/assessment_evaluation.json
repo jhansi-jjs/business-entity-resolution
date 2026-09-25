@@ -1,0 +1,109 @@
+{
+  "model": "HistGradientBoosting",
+  "threshold": 0.75,
+  "sample_size": 500,
+  "overall_metrics": {
+    "macro_precision_raw": 0.9959333333333334,
+    "macro_recall_raw": 0.9748190476190476,
+    "macro_f0_5_raw": 0.9893473514932789,
+    "singleton_accuracy_raw": 1.0,
+    "macro_precision": 0.9959,
+    "macro_recall": 0.9748,
+    "macro_f0_5": 0.9893,
+    "singleton_count": 27,
+    "singleton_accuracy": 1.0,
+    "avg_predicted_matches": 3.43,
+    "pct_zero_predicted": 5.4,
+    "total_evaluated_s1": 500
+  },
+  "breakdowns": {
+    "by_country": {
+      "India": {
+        "macro_precision_raw": 0.9939698492462311,
+        "macro_recall_raw": 0.9598947116535057,
+        "macro_f0_5_raw": 0.983142845910424,
+        "singleton_accuracy_raw": 1.0,
+        "macro_precision": 0.994,
+        "macro_recall": 0.9599,
+        "macro_f0_5": 0.9831,
+        "singleton_count": 11,
+        "singleton_accuracy": 1.0,
+        "avg_predicted_matches": 3.37,
+        "pct_zero_predicted": 5.53,
+        "total_evaluated_s1": 199
+      },
+      "US": {
+        "macro_precision_raw": 0.9972314507198229,
+        "macro_recall_raw": 0.98468596741022,
+        "macro_f0_5_raw": 0.9934493335895849,
+        "singleton_accuracy_raw": 1.0,
+        "macro_precision": 0.9972,
+        "macro_recall": 0.9847,
+        "macro_f0_5": 0.9934,
+        "singleton_count": 16,
+        "singleton_accuracy": 1.0,
+        "avg_predicted_matches": 3.47,
+        "pct_zero_predicted": 5.32,
+        "total_evaluated_s1": 301
+      }
+    },
+    "by_cardinality": {
+      "0 (Singleton)": {
+        "macro_precision_raw": 1.0,
+        "macro_recall_raw": 1.0,
+        "macro_f0_5_raw": 1.0,
+        "singleton_accuracy_raw": 1.0,
+        "macro_precision": 1.0,
+        "macro_recall": 1.0,
+        "macro_f0_5": 1.0,
+        "singleton_count": 27,
+        "singleton_accuracy": 1.0,
+        "avg_predicted_matches": 0.0,
+        "pct_zero_predicted": 100.0,
+        "total_evaluated_s1": 27
+      },
+      "1 match": {
+        "macro_precision_raw": 1.0,
+        "macro_recall_raw": 1.0,
+        "macro_f0_5_raw": 1.0,
+        "singleton_accuracy_raw": null,
+        "macro_precision": 1.0,
+        "macro_recall": 1.0,
+        "macro_f0_5": 1.0,
+        "singleton_count": 0,
+        "singleton_accuracy": "N/A",
+        "avg_predicted_matches": 1.0,
+        "pct_zero_predicted": 0.0,
+        "total_evaluated_s1": 27
+      },
+      "2-3 matches": {
+        "macro_precision_raw": 0.9919093851132685,
+        "macro_recall_raw": 0.9668284789644014,
+        "macro_f0_5_raw": 0.9836501005381946,
+        "singleton_accuracy_raw": null,
+        "macro_precision": 0.9919,
+        "macro_recall": 0.9668,
+        "macro_f0_5": 0.9837,
+        "singleton_count": 0,
+        "singleton_accuracy": "N/A",
+        "avg_predicted_matches": 2.5,
+        "pct_zero_predicted": 0.0,
+        "total_evaluated_s1": 206
+      },
+      "4+ matches": {
+        "macro_precision_raw": 0.9984722222222222,
+        "macro_recall_raw": 0.9760119047619047,
+        "macro_f0_5_raw": 0.9918406459823805,
+        "singleton_accuracy_raw": null,
+        "macro_precision": 0.9985,
+        "macro_recall": 0.976,
+        "macro_f0_5": 0.9918,
+        "singleton_count": 0,
+        "singleton_accuracy": "N/A",
+        "avg_predicted_matches": 4.89,
+        "pct_zero_predicted": 0.0,
+        "total_evaluated_s1": 240
+      }
+    }
+  }
+}

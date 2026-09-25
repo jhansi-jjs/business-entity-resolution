@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Run script for Business Entity Resolution Challenge.
 
 Executes the complete end-to-end inference pipeline and validates the final submission files.
@@ -47,6 +47,10 @@ def main():
     print(f"Matching Results: {results['matching_file']}")
     print(f"Candidate Pairs:  {results['candidate_file']}")
     print("="*70 + "\n")
+
+    if not args.no_validator and results.get("validator_status") != "PASS":
+        print("ERROR: Organizer submission validation failed!", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
