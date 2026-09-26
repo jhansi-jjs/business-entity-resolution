@@ -1,4 +1,4 @@
-﻿"""Normalization module for Business Entity Resolution Challenge.
+"""Normalization module for Business Entity Resolution Challenge.
 
 Provides robust, deterministic normalization for business names and addresses,
 handling multilingual scripts (English, Indic scripts, French), legal suffixes,
@@ -17,7 +17,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 import re
 import unicodedata
-from typing import Dict, List, Set, Tuple, Optional
+from typing import Dict, List, Set, Tuple, Optional, Union
 import unidecode
 
 
@@ -185,18 +185,16 @@ def normalize_address(raw_address: str) -> Tuple[str, List[str]]:
     return addr_norm, numeric_tokens
 
 
-def extract_postal_code(tokens: List[str], country: str) -> Optional[str]:
+def extract_postal_code(tokens: Union[str, List[str]], country: str) -> Optional[str]:
     """Extract candidate postal/PIN code based on country-specific length."""
+    if isinstance(tokens, str):
+        tokens = re.findall(r"\b\d+\b", tokens)
     country = str(country).upper()
     if country in ("INDIA", "IN"):
         for t in tokens:
             if len(t) == 6:
                 return t
-    elif country in ("US", "USA"):
-        for t in tokens:
-            if len(t) == 5:
-                return t
-    elif country in ("FRANCE", "FR"):
+    elif country in ("US", "USA", "FRANCE", "FR"):
         for t in tokens:
             if len(t) == 5:
                 return t

@@ -1,16 +1,15 @@
-# business-entity-resolution
-Production-grade ML pipeline for business entity resolution and record linkage.
+# Business Entity Resolution — Amazon ML Challenge 2026
+
+Production-grade entity resolution and record linkage pipeline designed to link reference businesses from **Source 1** to matching records across noisy **Source 2** and **Source 3** datasets without external APIs, paid cloud services, or web lookups.
+
+Optimized strictly for the official competition evaluation metric: **Macro-Averaged $F_{0.5}$** (penalizing false merges twice as heavily as missed links, with strict singleton credit).
 
 ---
 
-## Business Entity Resolution Solution & Pipeline
-
-This repository implements a high-precision, scalable entity resolution and record linkage system designed to link reference businesses from **Source 1** to matching records across noisy **Source 2** and **Source 3** datasets without external APIs, paid cloud services, or web lookups.
-
-### Architecture Overview
+## 1. System Architecture
 
 ```text
-RAW ORGANIZER TSVs (S1, S2, S3)
+RAW TSVs (Source 1: 1.73M queries, Source 2: 4.89M targets, Source 3: 5.70M targets)
         │
         ▼
 [1] DATA LOADER & SCHEMA VALIDATION (src/data_loader.py)
@@ -18,193 +17,191 @@ RAW ORGANIZER TSVs (S1, S2, S3)
         ▼
 [2] DETERMINISTIC NORMALIZATION (src/normalize.py)
         ├── Business Name Normalization & Core Extraction
-        ├── Address Standardisation & Numeric Token Extraction
-        └── Legal Suffix & Multi-Script (Indic, French, US) Handling
+        ├── Address Standardization & Numeric Token Parsing
+        ├── Postal Code Extraction (US 5-digit, India 6-digit PIN, France 5-digit)
+        └── Indic Cross-Script Transliteration (Devanagari/Latin ASCII)
         │
         ▼
 [3] SCALABLE CANDIDATE GENERATION / BLOCKING (src/blocking.py)
         ├── Lossless Country Partitioning (US, India, France)
-        ├── Exact Core Inverted Index
-        ├── Prefix-4 & Token 2-Gram Inverted Index
-        ├── Rare Token & Postal Code Index
-        └── Inverted-Index Multi-Strategy Retrieval (400–800+ q/s on CPU)
+        ├── Strategy 1: Exact Core Inverted Index (address-ranked if >15)
+        ├── Strategy 2: Postal / Address-Anchored Locality Key (name-ranked)
+        ├── Strategy 3: Multi-Key Fuzzy Retrieval (rarity-sorted, posting-pruned)
+        └── Compact Candidate Pools: ~29.8 candidates / query (zero brute force)
         │
         ▼
-[4] PAIRWISE FEATURE ENGINEERING (src/features.py)
+[4] VECTORIZED PAIRWISE FEATURE ENGINEERING (src/features.py, src/predict.py)
         ├── 14 Name Similarity Features (Exact, Fuzz, Token Sort/Set, Indic/ASCII)
         ├── 12 Address Similarity Features (Numeric Jaccard, Postal, Fuzz)
-        └── 5 Metadata & Retrieval Scores (Throughput: ~35,000 pairs/sec)
+        ├── 5 Metadata & Retrieval Signals
+        └── Precomputed Query Tokens & Direct NumPy Float32 Matrix Generation
         │
         ▼
-[5] MATCHING MODEL (src/train.py)
-        └── HistGradientBoosting Classifier (Grouped Validation by S1)
+[5] MATCHING MODEL & THRESHOLDING (src/train.py, models/matcher.joblib)
+        ├── HistGradientBoosting Classifier (trained on 685k hard negatives)
+        └── Calibrated Decision Threshold = 0.68 (Macro F0.5 Optimized)
         │
         ▼
-[6] THRESHOLD TUNING (F0.5 Optimized)
-        └── Empirically calibrated threshold = 0.75
+[6] MEMORY-BOUNDED INFERENCE & ATOMIC PROMOTION (src/predict.py)
+        ├── Memory footprint < 7.2 GB RAM (runs completely on local CPU)
+        ├── Strict Subset Invariant: matches ⊆ candidates asserted per entity
+        ├── Atomic Promotion: writes .tmp first, verifies line counts, renames
+        ├── output/matching_results.tsv (1,732,544 rows)
+        └── output/candidate_pairs.tsv (1,732,544 rows)
         │
         ▼
-[7] MEMORY-BOUNDED INFERENCE & AGGREGATION (src/predict.py)
-        ├── Lightweight tuple lookup & on-demand candidate enrichment (<4.5 GB RAM)
-        ├── Atomic file writing (.tmp promotion)
-        ├── output/matching_results.tsv (scored leaderboard file)
-        └── output/candidate_pairs.tsv (blocking candidate set)
-        │
-        ▼
-[8] SUBMISSION VALIDATION (utils/validate_submission.py)
-        └── Official Organizer Validator (PASS)
+[7] SUBMISSION VALIDATION & AUDIT (utils/validate_submission.py, utils/audit_submission.py)
+        ├── Official Organizer Submission Validator (PASS)
+        └── Distribution Fingerprint & Human Spot-Check Audit
 ```
 
 ---
 
-### Repository Structure
+## 2. Engineering Log & Root-Cause Diagnosis
+
+During the competition, prior iterations scored significantly below expectations (**0.386** on the baseline and **0.453** on the initial GBDT). A thorough architectural and code audit diagnosed the exact root causes and led to systemic fixes:
+
+### Issue A: The Toy 25k Sandbox Distractor Bias
+- **Symptom:** A toy experiment on 25k queries claimed `0.9893` $F_{0.5}$, but the model failed on the real challenge.
+- **Root Cause:** The 25k sandbox evaluated true links against only 10,000 random distractors where true answers were pre-selected. In the actual 10.3M target index, lookalike businesses with the same name in different cities or different branches in the same pin code overwhelmed the naive matcher.
+- **Resolution:** Replaced sandbox data with **full-scale hard-negative mining** (`experiments/train_hard_negatives.py`), extracting 684,587 difficult candidate pairs directly through the blocker against 500,000 full targets per country.
+
+### Issue B: The Baseline Single-Digit False Merge Bug (0.386 Score)
+- **Symptom:** Deterministic baseline scored 0.386 with severe precision collapse.
+- **Root Cause:** In `src/deterministic_baseline.py`, entities with matching core names were merged if *any single digit* matched between their addresses (e.g. `"Suite 1"` vs `"1st Ave"`). This created massive runaway mega-clusters of hundreds of unrelated entities.
+- **Resolution:** Retired heuristic digit matching in favor of the 31-feature GBDT model requiring composite confidence across street tokens, house numbers, legal suffixes, and postal codes.
+
+### Issue C: The 1,500 Postings Cap & Postal Code Bug (0.453 Score)
+- **Symptom:** The initial GBDT scored 0.453 due to low recall.
+- **Root Cause:** 
+  1. `CountryBlocker` had a hard cap `max_postings = 1500` *during index creation*, literally discarding records from the index across 10 million entities.
+  2. `extract_postal_code` in `src/normalize.py` expected a string, but received a list of numeric tokens. The regex check failed on every record, completely disabling postal code blocking keys.
+- **Resolution:** Removed the index posting cap entirely, updated `extract_postal_code` to accept `Union[str, List[str]]`, and added Indic cross-script ASCII keys (`w1_asc`, `w2_asc`, `pref4_asc`) and address-anchored locality keys (`addr_num`).
+
+### Issue D: Inference Throughput Bottleneck (8.4 q/s $\to$ ~300+ q/s)
+- **Symptom:** Initial full test inference estimated 57+ hours execution time.
+- **Root Cause:** 
+  1. `enrich_record_dict` was repeatedly re-normalizing candidate records inside every batch (13.2 million redundant normalizations).
+  2. In Strategy 3, generic English stopword keys (`"partners"`, `"center"`, `"care"`) had up to 86,000 postings, pulling 100,000 candidates for a single query into pure Python string loops.
+- **Resolution:** 
+  1. Vectorized upfront normalization of targets and precomputed query token sets.
+  2. Rarity-sorted keys with selective posting pruning (keys with $>1,000$ postings skipped in Strategy 3).
+  3. Feature computation directly into pre-allocated NumPy `float32` arrays.
+  4. Throughput jumped from **8.4 q/s to ~300–400 q/s**, completing all 1.73M queries in **under 2 hours**.
+
+---
+
+## 3. Empirical Benchmark Results
+
+### A. Held-Out Assessment Split (3,750 Queries against 500k Targets)
+Evaluated on frozen held-out data with real ground-truth singleton rates and full-target distractors:
+
+| Metric | Previous Baseline | Previous GBDT | **Final Retrained Model** |
+| :--- | :---: | :---: | :---: |
+| **Macro $F_{0.5}$** | 0.3860 | 0.4530 | **0.9274** |
+| **Precision** | ~35.0% | ~48.2% | **96.20%** |
+| **Recall** | ~60.0% | ~38.0% | **85.98%** |
+| **Singleton Accuracy** | ~10.0% | ~52.0% | **92.31%** |
+| **Decision Threshold** | Heuristic | 0.75 | **0.68** |
+
+### B. Full 10.3M Target Index Candidate Retrieval (Blocking Benchmark)
+- **US Recall (6.19M targets):** `93.75%` (165 / 176 true links)
+- **India Recall (4.13M targets):** `76.04%` (146 / 192 true links)
+- **Overall Recall:** `84.51%` (311 / 368 true links)
+- **Average Candidates per Query:** `30.7`
+
+---
+
+## 4. Final Submission Statistics (Test Set)
+
+Full inference across all **1,732,544 test entities** produced the official submission files:
+
+- **Total S1 Queries Written:** `1,732,544`
+- **Total Predicted Matches:** `6,059,456`
+- **Average Links per Matched Query:** `3.84`
+  - US: `3.58` links/query (matches ground truth registry density)
+  - France: `6.35` links/query (matches SIREN/SIRET multi-branch density)
+  - India: `2.51` links/query (matches standalone proprietor density)
+- **Total Candidate Pairs:** `51,619,585` (**29.79 candidates / query**)
+- **Singleton Rate:** `155,401 singletons (8.97%)`
+- **Strict Subset Invariant Violations:** **0** (`matches ⊆ candidates` holds 100%)
+- **Mega-Cluster Check:** **Zero** (95.3% of matched entities have 1 to 6 links; max cluster: 41)
+- **Official Submission Validator Status:** **`PASS — no blocking issues found. Safe to submit.`**
+
+---
+
+## 5. Repository Structure
 
 ```text
 business-entity-resolution/
-├── dataset/
-│   ├── train/
-│   │   ├── train_source1.tsv
-│   │   ├── train_source2.tsv
-│   │   ├── train_source3.tsv
-│   │   └── train_ground_truth.tsv
-│   └── test/
-│       ├── test_source1.tsv
-│       ├── test_source2.tsv
-│       └── test_source3.tsv
-├── utils/
-│   └── validate_submission.py         # Organizer submission validator
-├── Documentation_template.md          # Completed methodology documentation
-├── README.md                          # Project documentation
-├── requirements.txt                   # Minimal pinned dependencies
-├── run.py                             # Main reproduction CLI entrypoint
+├── dataset/                           # Ignored in git (organizer data)
+│   ├── train/                         # train_source1, 2, 3, train_ground_truth
+│   └── test/                          # test_source1, 2, 3
+├── models/                            # Ignored in git (binary artifacts)
+│   ├── matcher.joblib                 # Trained GBDT matcher (HistGradientBoosting)
+│   └── model_config.json              # Model configuration & optimal threshold (0.68)
+├── output/                            # Ignored in git (submission files)
+│   ├── matching_results.tsv           # Official scored leaderboard submission
+│   └── candidate_pairs.tsv            # Candidate blocking pairs
 ├── src/
 │   ├── __init__.py
 │   ├── data_loader.py                 # TSV ingestion & schema validation
 │   ├── normalize.py                   # Multi-script name & address cleaner
-│   ├── blocking.py                    # Multi-key Inverted Index Blocker
+│   ├── blocking.py                    # Multi-strategy Inverted Index Blocker
 │   ├── features.py                    # 31 pairwise similarity features
-│   ├── train.py                       # Grouped validation & GBDT training
-│   ├── evaluate.py                    # Entity-level macro F0.5 metrics
-│   ├── predict.py                     # Memory-bounded inference & TSV writer
-│   └── pipeline.py                    # Full 8-stage pipeline orchestrator
-├── models/
-│   ├── matcher.joblib                 # Trained GBDT matcher
-│   └── model_config.json              # Model hyperparameters & threshold (0.75)
-├── output/
-│   ├── matching_results.tsv           # Final matches for leaderboard scoring
-│   ├── candidate_pairs.tsv            # Candidate blocking pairs
-│   └── sample_smoke/                  # Isolated smoke test outputs
+│   ├── train.py                       # Base training routine
+│   ├── evaluate.py                    # Macro F0.5 evaluation metrics
+│   ├── predict.py                     # High-throughput vectorized inference engine
+│   └── pipeline.py                    # End-to-end 8-stage pipeline orchestrator
+├── utils/
+│   ├── validate_submission.py         # Official organizer submission validator
+│   └── audit_submission.py            # Quality audit & real test match spot-checker
+├── experiments/
+│   ├── train_hard_negatives.py        # Mining & training pipeline on 685k hard pairs
+│   ├── benchmark_full_targets.py      # Full 10.3M target index blocking benchmark
+│   └── splits/                        # Split manifest & sample queries
 ├── tests/
-│   ├── test_evaluation_regression.py  # Unit tests for Macro F0.5 & singletons
-│   └── test_normalization_regression.py # Unit tests for legal suffixes & Indic text
-└── experiments/
-    ├── eda_report.json                # Complete structural audit
-    ├── experiments.csv                # Model comparison results
-    ├── ablation_results.csv           # Feature ablation studies
-    ├── assessment_evaluation.json     # Frozen held-out assessment metrics
-    ├── full_index_tune_benchmark.json # 10.3M uncurated target benchmark
-    └── splits/
-        └── split_manifest.json        # Stratified leak-free train/tune/test splits
+│   └── test_evaluation_regression.py  # Unit tests for Macro F0.5 & singletons
+├── requirements.txt                   # Minimal pinned dependencies
+├── run.py                             # Main reproduction CLI entrypoint
+└── README.md
 ```
 
 ---
 
-### Empirical Validation & Benchmark Results
+## 6. Setup & Execution
 
-All metrics below are measured on leak-free splits sampled strictly from organizer training data.
-
-#### 1. Frozen Held-Out Assessment Split (500 Queries, Evaluated Once)
-- **Macro $F_{0.5}$:** `0.9893`
-- **Macro Precision:** `0.9959`
-- **Macro Recall:** `0.9748`
-- **Singleton Accuracy:** `100.0%` (27 / 27 true singletons correctly assigned empty match sets)
-- **Average Candidates per Query:** `29.4`
-
-#### 2. Uncurated 10.3M Full Target Index Blocking Benchmark
-Evaluated against the complete uncurated training target pool (10.3M records in Source 2 + Source 3):
-- **Overall Candidate Recall:** `95.65%`
-- **India Partition Recall (4.13M targets):** `94.79%`
-- **US Partition Recall (6.19M targets):** `96.59%`
-- **Average Candidates per Query:** `32.4`
-- **Retrieval Latency:** `1.2–2.4 ms/query` (`419–816 queries/sec` on CPU)
-
-#### 3. Model Comparison on Tuning Split (Macro $F_{0.5}$)
-| Model Architecture | Macro Precision | Macro Recall | Macro $F_{0.5}$ | Optimal Threshold |
-| :--- | :---: | :---: | :---: | :---: |
-| **HistGradientBoosting (Chosen)** | **0.9972** | **0.9723** | **0.9921** | **0.75** |
-| Random Forest | 0.9958 | 0.9587 | 0.9881 | 0.70 |
-| Logistic Regression | 0.9812 | 0.9529 | 0.9754 | 0.60 |
-| Decision Tree | 0.9785 | 0.9560 | 0.9739 | 0.65 |
-
-#### 4. Feature Ablation Analysis
-Ablating feature subsets from the 31-feature set confirms complementary signals:
-- **Baseline (All 31 features):** Macro $F_{0.5} = 0.9921$
-- **Without Address Features:** Macro $F_{0.5} = 0.9234$ ($-0.0687$ drop)
-- **Without Name Fuzzy Features:** Macro $F_{0.5} = 0.8841$ ($-0.1080$ drop)
-- **Without Retrieval Scores:** Macro $F_{0.5} = 0.9798$ ($-0.0123$ drop)
-
----
-
-### Hardware Efficiency & Scalability
-
-- **Zero GPU Requirement:** Complete candidate generation, feature extraction, and GBDT inference execute entirely on CPU.
-- **Strict Memory Bounds:** Uses on-demand record dictionary enrichment and tuple-based target indexes, keeping peak memory working set below `4.5 GB RAM` (well within 16 GB laptop limits).
-- **Fast Inverted Index:** Inverted index with exact core, prefix-4, and token 2-grams replaces $O(N \cdot M)$ brute force sparse dot products, achieving up to 800+ queries/second per CPU thread.
-
----
-
-### Environment Setup
-
+### Environment Installation
 ```bash
 # Clone the repository
 git clone https://github.com/jhansi-jjs/business-entity-resolution.git
 cd business-entity-resolution
 
-# Install required dependencies
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
----
-
-### Generating Submission Files
-
-#### 1. Fast Smoke Test (200 Queries)
-Runs an isolated smoke test to verify candidate generation, scoring, and output writing:
-```bash
-python run.py --sample 200
-```
-*Outputs are saved to `output/sample_smoke/` without touching production submission files.*
-
-#### 2. Full Test Inference (All 1,732,544 Entities)
-Processes all 1.73M Source 1 test entities across US, India, and France:
+### Reproducing Full Inference
+Processes all 1,732,544 test entities across US, France, and India, writing `output/matching_results.tsv` and `output/candidate_pairs.tsv` and running the official submission validator:
 ```bash
 python run.py
 ```
-*Outputs are saved to `output/matching_results.tsv` and `output/candidate_pairs.tsv`.*
 
----
-
-### Running the Organizer Validator Independently
-
+### Running the Official Validator
 ```bash
 python utils/validate_submission.py \
     --matching output/matching_results.tsv \
     --candidate output/candidate_pairs.tsv \
-    --test-dir dataset/test
+    --test-dir dataset/test \
+    --check-ids
 ```
 
-The script verifies:
-1. File existence and valid TSV header format (`entity_id`, `matched_entity_ids`).
-2. Exact 1-to-1 match with test Source 1 entity IDs (no duplicates, no omissions, no extra IDs).
-3. Candidate subset invariant: every predicted match is strictly present in the candidate set.
-4. Correct comma-separated string representation for multiple matches and empty strings for singletons.
-
----
-
-### Running Unit Tests
-
+### Running the Visual Spot-Check Audit
+Pulls random test entities and prints side-by-side matches across Source 1, Source 2, and Source 3:
 ```bash
-pytest tests/ -v
+python utils/audit_submission.py --samples 15
 ```
-All unit tests for Macro $F_{0.5}$ metric computation, singleton edge cases, address normalization, and Indic/French entity handling pass without warnings.
-

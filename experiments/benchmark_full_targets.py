@@ -18,11 +18,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
 
 from src.data_loader import get_default_paths, iter_source_tsv, load_ground_truth
 from src.normalize import normalize_name, normalize_address
 from src.blocking import CountryBlocker
+from joblib import Parallel, delayed
 
 
 def get_memory_usage_mb():
@@ -72,10 +73,23 @@ def benchmark_country_full_index(
     print(f"Loaded {len(targets_df):,} full target records in {t_load:.1f}s (RAM: {mem_loaded:.1f} MB, Δ: {mem_loaded - mem_start:.1f} MB).")
 
     # 2. Normalization
-    print("Normalizing names and addresses...")
+    print("Normalizing names and addresses in parallel...")
     t_norm_0 = time.time()
-    targets_df["name_core"] = [normalize_name(n)[1] for n in targets_df["business_name"]]
-    targets_df["addr_norm"] = [normalize_address(a)[0] for a in targets_df["business_address"]]
+    t_names = targets_df["business_name"].fillna("").astype(str).tolist()
+    t_addrs = targets_df["business_address"].fillna("").astype(str).tolist()
+    
+    chunk_size = 20000
+    chunks = [(t_names[i:i+chunk_size], t_addrs[i:i+chunk_size]) for i in range(0, len(t_names), chunk_size)]
+    
+    def _norm_chunk(b_names, b_addrs):
+        return [normalize_name(n)[1] for n in b_names], [normalize_address(a)[0] for a in b_addrs]
+
+    norm_res = Parallel(n_jobs=8, batch_size=4)(delayed(_norm_chunk)(cn, ca) for cn, ca in chunks)
+    targets_df["name_core"] = [c for r in norm_res for c in r[0]]
+    targets_df["addr_norm"] = [a for r in norm_res for a in r[1]]
+    del t_names, t_addrs, chunks, norm_res
+    gc.collect()
+
     s1_tune_df = s1_tune_df.copy()
     s1_tune_df["name_core"] = [normalize_name(n)[1] for n in s1_tune_df["business_name"]]
     s1_tune_df["addr_norm"] = [normalize_address(a)[0] for a in s1_tune_df["business_address"]]

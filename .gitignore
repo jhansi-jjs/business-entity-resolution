@@ -1,12 +1,29 @@
+# Data and model artifacts (too large for git)
 dataset/
 models/
 output/
+
+# Virtual environments
 .venv/
 venv/
+ENV/
+
+# Python cache & compiled files
 __pycache__/
 *.pyc
-.ipynb_checkpoints/
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Temporary, scratch, and logs
+scratch/
+*.tmp
+*.log
+*.swp
+
+# OS-specific files
 .DS_Store
+.ipynb_checkpoints/
 __MACOSX/
 ._*
 Thumbs.db

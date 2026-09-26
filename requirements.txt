@@ -1,11 +1,22 @@
-pandas
-numpy
-scikit-learn
-scipy
-rapidfuzz
-matplotlib
-joblib
-unidecode
-tqdm
-xgboost
-lightgbm
+# Core data + scientific stack
+numpy==2.5.3
+pandas==3.0.6
+scipy==1.18.1
+scikit-learn==1.9.1
+
+# Similarity / fuzzy matching
+rapidfuzz==3.14.6
+Unidecode==1.4.0
+
+# Model persistence + system metrics
+joblib==1.6.0
+psutil==7.2.2
+
+# Gradient boosting (imported at module level in src/train.py)
+lightgbm==4.7.0
+
+# Plotting (notebooks/01_data_exploration.ipynb)
+matplotlib==3.11.2
+
+# Tests (`pytest tests/ -v`)
+pytest==9.1.1

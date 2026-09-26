@@ -3,62 +3,62 @@
     "country": "India",
     "queries_evaluated": 50,
     "indexed_targets_count": 4133346,
-    "candidate_pairs_generated": 1626,
+    "candidate_pairs_generated": 1649,
     "candidate_counts": {
-      "min": 26,
-      "max": 55,
-      "mean": 32.52,
-      "median": 31.0,
-      "p95": 44.55
+      "min": 21,
+      "max": 45,
+      "mean": 32.98,
+      "median": 32.0,
+      "p95": 45.0
     },
     "blocking_recall": {
       "true_links_total": 192,
-      "true_links_retrieved": 182,
-      "recall": 0.9479166666666666
+      "true_links_retrieved": 146,
+      "recall": 0.7604166666666666
     },
     "timing_seconds": {
-      "target_stream_load": 30.613084077835083,
-      "normalization": 864.0861313343048,
-      "indexing_fit": 628.4874730110168,
-      "candidate_query": 69.67938256263733,
-      "total": 1592.9716489315033
+      "target_stream_load": 29.47480010986328,
+      "normalization": 254.40310716629028,
+      "indexing_fit": 206.5387420654297,
+      "candidate_query": 9.539954423904419,
+      "total": 499.9587941169739
     },
     "memory_mb": {
-      "start": 523.578125,
-      "after_load": 1934.78515625,
-      "after_fit": 5716.484375,
-      "peak_delta": 5192.90625
+      "start": 493.29296875,
+      "after_load": 1806.01953125,
+      "after_fit": 5326.01953125,
+      "peak_delta": 4832.7265625
     }
   },
   "US": {
     "country": "US",
     "queries_evaluated": 50,
     "indexed_targets_count": 6186873,
-    "candidate_pairs_generated": 1663,
+    "candidate_pairs_generated": 1419,
     "candidate_counts": {
-      "min": 27,
-      "max": 54,
-      "mean": 33.26,
-      "median": 31.0,
-      "p95": 52.0
+      "min": 21,
+      "max": 45,
+      "mean": 28.38,
+      "median": 27.0,
+      "p95": 36.0
     },
     "blocking_recall": {
       "true_links_total": 176,
-      "true_links_retrieved": 170,
-      "recall": 0.9659090909090909
+      "true_links_retrieved": 165,
+      "recall": 0.9375
     },
     "timing_seconds": {
-      "target_stream_load": 33.73562502861023,
-      "normalization": 1290.1731457710266,
-      "indexing_fit": 1055.0576741695404,
-      "candidate_query": 91.72910785675049,
-      "total": 2470.7772872447968
+      "target_stream_load": 41.318336963653564,
+      "normalization": 291.2122344970703,
+      "indexing_fit": 302.88341522216797,
+      "candidate_query": 10.191084623336792,
+      "total": 645.6078369617462
     },
     "memory_mb": {
-      "start": 235.94140625,
-      "after_load": 1762.61328125,
-      "after_fit": 5978.25,
-      "peak_delta": 5742.30859375
+      "start": 749.39453125,
+      "after_load": 2032.26171875,
+      "after_fit": 7136.04296875,
+      "peak_delta": 6386.6484375
     }
   }
 }
